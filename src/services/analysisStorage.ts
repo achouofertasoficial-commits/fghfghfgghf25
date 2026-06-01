@@ -286,3 +286,22 @@ export function hasUserClearedHistory(userId: string): boolean {
   const currentUserId = userId || 'local-user-anonymous';
   return localStorage.getItem(`contracheque_ai_history_cleared_${currentUserId}`) === "true";
 }
+
+/**
+ * Returns a unique numeric value representing the chronological competence of an analysis.
+ * Format month index from 0 (Janeiro) to 11 (Dezembro).
+ * Dezembro/2025 -> 2025 * 12 + 11 = 24311
+ * Janeiro/2026 -> 2026 * 12 + 0 = 24312
+ */
+export function getCompetenceValue(analysis: any): number {
+  if (!analysis || !analysis.competencia) return 0;
+  const mes = analysis.competencia.mes;
+  const ano = Number(analysis.competencia.ano) || 0;
+  const meses = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+  const idx = meses.indexOf(mes || "");
+  const monthNum = idx === -1 ? 0 : idx;
+  return ano * 12 + monthNum;
+}

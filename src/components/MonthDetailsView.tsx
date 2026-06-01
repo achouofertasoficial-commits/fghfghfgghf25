@@ -1,5 +1,6 @@
 import React from 'react';
 import { ContrachequeAnalise } from '../types';
+import { getCompetenceValue } from '../services/analysisStorage';
 
 interface MonthDetailsViewProps {
   analysedList: ContrachequeAnalise[];
@@ -9,8 +10,11 @@ interface MonthDetailsViewProps {
 
 export default function MonthDetailsView({ analysedList, selectedMonthId, setSelectedMonthId }: MonthDetailsViewProps) {
   
+  // Sort the list descending by competence real value (newest first)
+  const sortedList = [...analysedList].sort((a, b) => getCompetenceValue(b) - getCompetenceValue(a));
+
   // Find current active month
-  const activeMonth = analysedList.find(item => item.id === selectedMonthId) || analysedList[0];
+  const activeMonth = sortedList.find(item => item.id === selectedMonthId) || sortedList[0];
 
   if (!activeMonth) {
     return (
@@ -46,7 +50,7 @@ export default function MonthDetailsView({ analysedList, selectedMonthId, setSel
             onChange={(e) => setSelectedMonthId(e.target.value)}
             className="bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-800 outline-none cursor-pointer shadow-xs"
           >
-            {analysedList.map((item) => (
+            {sortedList.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.competencia.mes} {item.competencia.ano}
               </option>

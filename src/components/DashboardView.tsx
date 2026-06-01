@@ -1,5 +1,6 @@
 import React from 'react';
 import { ContrachequeAnalise, User, Screen } from '../types';
+import { getCompetenceValue } from '../services/analysisStorage';
 
 interface DashboardViewProps {
   analysedList: ContrachequeAnalise[];
@@ -30,11 +31,14 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
     );
   }
 
+  // Sort analysedList descendign by competence real value (newest first)
+  const sortedList = [...analysedList].sort((a, b) => getCompetenceValue(b) - getCompetenceValue(a));
+
   // Use the first (latest) analysed item to populate wages
-  const latestItem = analysedList[0];
+  const latestItem = sortedList[0];
 
   // Comparative month details
-  const previousItem = analysedList[1];
+  const previousItem = sortedList[1];
   let comparisonText = "Sem mês anterior para comparar";
   let showTrendingIcon = false;
   let isPositive = false;
@@ -242,11 +246,11 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
             </div>
 
             {/* Invert list to show chronologically if we have months */}
-            {[...analysedList].reverse().map((item, index) => {
+            {[...sortedList].reverse().map((item, index) => {
               // Scale bar height according to values (from R$ 3000 to R$ 7000)
               const baseValue = item.valores.salario_liquido || 3000;
               const barHeightPct = Math.min(Math.max(((baseValue) / 7500) * 100, 20), 100);
-              const isLast = index === analysedList.length - 1;
+              const isLast = index === sortedList.length - 1;
 
               return (
                 <div 

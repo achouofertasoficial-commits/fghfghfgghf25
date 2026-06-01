@@ -55,9 +55,10 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
     return idx === -1 ? 0 : idx;
   };
 
-  const getCompetenceValue = (ano: any, mes: string | null) => {
-    const yearNum = Number(ano) || 0;
-    const monthNum = getMonthIndex(mes);
+  const getCompetenceValue = (analysis: ContrachequeAnalise | null) => {
+    if (!analysis || !analysis.competencia) return 0;
+    const yearNum = Number(analysis.competencia.ano) || 0;
+    const monthNum = getMonthIndex(analysis.competencia.mes);
     return yearNum * 12 + monthNum;
   };
 
@@ -68,7 +69,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
 
   // Sort history from newest to oldest for lists/dropdowns
   const sortedHistoryList = [...filteredAnalyses].sort((a, b) => 
-    getCompetenceValue(b.competencia.ano, b.competencia.mes) - getCompetenceValue(a.competencia.ano, a.competencia.mes)
+    getCompetenceValue(b) - getCompetenceValue(a)
   );
 
   // Sync comparator default options
@@ -152,7 +153,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
   // Determine dynamic graph data based on selected range
   const graphData = activeYear === "all"
     ? [...filteredAnalyses]
-        .sort((a, b) => getCompetenceValue(a.competencia.ano, a.competencia.mes) - getCompetenceValue(b.competencia.ano, b.competencia.mes))
+        .sort((a, b) => getCompetenceValue(a) - getCompetenceValue(b))
         .map(item => ({
           id: item.id,
           label: `${getShortMonthName(item.competencia.mes)}/${String(item.competencia.ano).substring(2)}`,

@@ -688,9 +688,11 @@ export default function App() {
     const email = user?.email || "joao.silva@exemplo.com.br";
     const userId = getUserIdFromEmail(email);
     
-    // Set user_id and make sure calculations are correct
+    // Set user_id and make sure calculations are correct, with guaranteed valid id
+    const finalId = finalParsedDoc.id || `pc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const preparedDoc = calculateSafeMetrics({
       ...finalParsedDoc,
+      id: finalId,
       user_id: userId,
       uploadedAt: finalParsedDoc.uploadedAt || new Date().toISOString()
     });
