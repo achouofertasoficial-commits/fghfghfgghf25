@@ -9,54 +9,118 @@ interface HistoryViewProps {
 }
 
 export default function HistoryView({ analysedList, onNavigate, setSelectedMonthId }: HistoryViewProps) {
+  // Generate unique available years sorted descending
   const availableYears = Array.from(new Set(
     analysedList.map(item => String(item.competencia.ano || "")).filter(Boolean)
-  )).sort((a, b) => b.localeCompare(a));
+  )).sort((a, b) => Number(b) - Number(a));
 
-  const finalYears = availableYears.length > 0 ? availableYears : [new Date().getFullYear().toString()];
-  
-  const [selectedYear, setSelectedYear] = useState(() => finalYears[0]);
+  // Determine initial state: current year if present, or most recent, or "all"
+  const [selectedYear, setSelectedYear] = useState<string>(() => {
+    const currentYearStr = new Date().getFullYear().toString();
+    if (availableYears.includes(currentYearStr)) {
+      return currentYearStr;
+    }
+    if (availableYears.length > 0) {
+      return availableYears[0];
+    }
+    return 'all';
+  });
+
   const [compAId, setCompAId] = useState("");
   const [compBId, setCompBId] = useState("");
   const [comparisonResult, setComparisonResult] = useState<any | null>(null);
 
-  // Sync selectedYear if list changes and previous selected is no longer valid
-  const activeYear = finalYears.includes(selectedYear) ? selectedYear : finalYears[0];
+  // Sync active selected year based on availability
+  const activeYear = selectedYear === 'all' || availableYears.includes(selectedYear)
+    ? selectedYear
+    : (availableYears.includes(new Date().getFullYear().toString())
+        ? new Date().getFullYear().toString()
+        : (availableYears.length > 0 ? availableYears[0] : 'all'));
+
+  // Months order in PT
+  const monthsInOrderPT = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
+  const shortMonths: Record<string, string> = {
+    "Janeiro": "Jan", "Fevereiro": "Fev", "Março": "Mar", "Abril": "Abr",
+    "Maio": "Mai", "Junho": "Jun", "Julho": "Jul", "Agosto": "Ago",
+    "Setembro": "Set", "Outubro": "Out", "Novembro": "Nov", "Dezembro": "Dez"
+  };
+
+  const getMonthIndex = (mes: string | null) => {
+    if (!mes) return 0;
+    const idx = monthsInOrderPT.indexOf(mes);
+    return idx === -1 ? 0 : idx;
+  };
+
+  const getCompetenceValue = (ano: any, mes: string | null) => {
+    const yearNum = Number(ano) || 0;
+    const monthNum = getMonthIndex(mes);
+    return yearNum * 12 + monthNum;
+  };
+
+  // Filter list by selected exercise year or keep all
+  const filteredAnalyses = activeYear === "all"
+    ? analysedList
+    : analysedList.filter(item => String(item.competencia.ano) === activeYear);
+
+  // Sort history from newest to oldest for lists/dropdowns
+  const sortedHistoryList = [...filteredAnalyses].sort((a, b) => 
+    getCompetenceValue(b.competencia.ano, b.competencia.mes) - getCompetenceValue(a.competencia.ano, a.competencia.mes)
+  );
 
   // Sync comparator default options
   useEffect(() => {
-    if (analysedList.length >= 2) {
-      if (!compAId) setCompAId(analysedList[0].id);
-      if (!compBId) setCompBId(analysedList[1].id);
+    if (sortedHistoryList.length >= 2) {
+      if (!compAId || !sortedHistoryList.some(x => x.id === compAId)) {
+        setCompAId(sortedHistoryList[0].id);
+      }
+      if (!compBId || !sortedHistoryList.some(x => x.id === compBId) || compBId === compAId) {
+        const remaining = sortedHistoryList.filter(x => x.id !== (compAId || sortedHistoryList[0].id));
+        if (remaining.length > 0) {
+          setCompBId(remaining[0].id);
+        }
+      }
+    } else if (sortedHistoryList.length === 1) {
+      if (!compAId || !sortedHistoryList.some(x => x.id === compAId)) {
+        setCompAId(sortedHistoryList[0].id);
+      }
+      setCompBId("");
+    } else {
+      setCompAId("");
+      setCompBId("");
     }
-  }, [analysedList]);
+  }, [sortedHistoryList, compAId, compBId]);
 
-  // Filter list by selected exercise year
-  const filteredList = analysedList.filter(item => String(item.competencia.ano) === activeYear);
+  useEffect(() => {
+    setComparisonResult(null);
+  }, [compAId, compBId]);
 
-  // Sum annual calculations based on the analysed list
-  const totalReceived = filteredList.reduce((acc, curr) => acc + (curr.valores.salario_liquido || 0), 0);
-  const totalDeducted = filteredList.reduce((acc, curr) => acc + (curr.valores.total_descontos || 0), 0);
+  // Sum annual/overall calculations
+  const totalReceived = filteredAnalyses.reduce((acc, curr) => acc + (curr.valores.salario_liquido || 0), 0);
+  const totalDeducted = filteredAnalyses.reduce((acc, curr) => acc + (curr.valores.total_descontos || 0), 0);
   
-  const countMonths = filteredList.length || 1;
-  const averageMonthly = Math.round(totalReceived / countMonths);
+  const countMonths = filteredAnalyses.length || 1;
+  const averageMonthly = filteredAnalyses.length > 0 ? Math.round(totalReceived / filteredAnalyses.length) : 0;
 
   // Find best month by ganho/dia
-  const bestMonthObj = [...filteredList].sort((a, b) => {
+  const bestMonthObj = [...filteredAnalyses].sort((a, b) => {
     const aVal = a.trabalho?.media_por_dia || 0;
     const bVal = b.trabalho?.media_por_dia || 0;
     return bVal - aVal;
   })[0];
 
   // Find worst month by ganho/dia
-  const worstMonthObj = [...filteredList].filter(item => (item.trabalho?.media_por_dia || 0) > 0).sort((a, b) => {
+  const worstMonthObj = [...filteredAnalyses].filter(item => (item.trabalho?.media_por_dia || 0) > 0).sort((a, b) => {
     const aVal = a.trabalho?.media_por_dia || 99999999;
     const bVal = b.trabalho?.media_por_dia || 99999999;
     return aVal - bVal;
   })[0];
   
   // Average daily earnings overall
-  const validDaysList = filteredList.filter(item => item.trabalho?.dias_trabalhados);
+  const validDaysList = filteredAnalyses.filter(item => item.trabalho?.dias_trabalhados);
   const totalLiquidForDays = validDaysList.reduce((acc, curr) => acc + (curr.valores.salario_liquido || 0), 0);
   const totalDaysAcrossMonths = validDaysList.reduce((acc, curr) => acc + (curr.trabalho?.dias_trabalhados || 0), 0);
   const averageDailyOverall = totalDaysAcrossMonths > 0 ? (totalLiquidForDays / totalDaysAcrossMonths) : null;
@@ -69,17 +133,6 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
       setComparisonResult(res);
     }
   };
-
-  const shortMonths: Record<string, string> = {
-    "Janeiro": "Jan", "Fevereiro": "Fev", "Março": "Mar", "Abril": "Abr",
-    "Maio": "Mai", "Junho": "Jun", "Julho": "Jul", "Agosto": "Ago",
-    "Setembro": "Set", "Outubro": "Out", "Novembro": "Nov", "Dezembro": "Dez"
-  };
-
-  const monthsInOrderPT = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-  ];
 
   const getShortMonthName = (fullMonth: string | null) => {
     if (!fullMonth) return "Mês";
@@ -94,15 +147,41 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
   const handleMonthClick = (id: string) => {
     setSelectedMonthId(id);
     onNavigate('month_details');
-  };  // Determine dynamic line coordinates
-  const maxNetVal = Math.max(...filteredList.map(x => x.valores.salario_liquido || 0), 5000);
-  const polylinePoints = monthsInOrderPT.map((mName, mIdx) => {
-    const match = filteredList.find(x => x.competencia.mes === mName);
-    const val = match ? (match.valores.salario_liquido || 0) : 0;
-    const x = (mIdx / 11) * 90 + 5; // offset margins
+  };  
+
+  // Determine dynamic graph data based on selected range
+  const graphData = activeYear === "all"
+    ? [...filteredAnalyses]
+        .sort((a, b) => getCompetenceValue(a.competencia.ano, a.competencia.mes) - getCompetenceValue(b.competencia.ano, b.competencia.mes))
+        .map(item => ({
+          id: item.id,
+          label: `${getShortMonthName(item.competencia.mes)}/${String(item.competencia.ano).substring(2)}`,
+          fullLabel: `${item.competencia.mes} ${item.competencia.ano}`,
+          value: item.valores.salario_liquido || 0,
+          isPresent: true,
+          match: item
+        }))
+    : monthsInOrderPT.map((mName, mIdx) => {
+        const match = filteredAnalyses.find(x => x.competencia.mes === mName);
+        return {
+          id: match ? match.id : `empty-${mIdx}`,
+          label: shortMonths[mName] || mName.substring(0, 3),
+          fullLabel: `${mName} ${activeYear}`,
+          value: match ? (match.valores.salario_liquido || 0) : 0,
+          isPresent: !!match,
+          match: match
+        };
+      });
+
+  const maxNetVal = Math.max(...graphData.map(x => x.value), 5000);
+  const polylinePoints = graphData.map((gItem, gIdx) => {
+    const val = gItem.value;
+    const totalCount = graphData.length;
+    const x = totalCount > 1 ? (gIdx / (totalCount - 1)) * 90 + 5 : 50; // offset margins
     const y = 80 - (maxNetVal > 0 ? (val / maxNetVal) * 60 : 0);
-    return { x, y, isPresent: !!match };
+    return { x, y, isPresent: gItem.isPresent };
   });
+
   const activePoints = polylinePoints.filter(p => p.isPresent);
   const activePolylineAttr = activePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
@@ -113,7 +192,9 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
         <div>
           <h1 className="text-2xl font-bold text-slate-900 md:hidden">Resumo Anual</h1>
           <h1 className="text-2xl font-bold text-slate-900 hidden md:block">Histórico Anual de Holerites</h1>
-          <p className="text-sm text-slate-500 mt-1">Acompanhe sua trajetória financeira consolidada ao longo do ano.</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {activeYear === 'all' ? "Visão consolidada de todos os anos" : "Acompanhe sua trajetória financeira consolidada ao longo do ano."}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <select 
@@ -121,7 +202,8 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
             onChange={(e) => setSelectedYear(e.target.value)}
             className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-800 outline-none cursor-pointer shadow-xs"
           >
-            {finalYears.map(year => (
+            <option value="all">Todos os anos</option>
+            {availableYears.map(year => (
               <option key={year} value={year}>Exercício {year}</option>
             ))}
           </select>
@@ -138,7 +220,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
             <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col relative overflow-hidden group shadow-xs">
               <span className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest flex items-center gap-1">
                 <span className="material-symbols-outlined text-emerald-700 text-sm">arrow_upward</span> 
-                Total Recebido Líquido ({activeYear})
+                Total Recebido Líquido ({activeYear === 'all' ? 'Todos os anos' : activeYear})
               </span>
               <div className="text-2xl font-bold text-slate-900 z-10">{formatCurrency(totalReceived)}</div>
               <div className="mt-4 flex items-center gap-1 text-emerald-700 text-[10px] font-bold">
@@ -151,7 +233,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
             <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col relative overflow-hidden group shadow-xs">
               <span className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest flex items-center gap-1">
                 <span className="material-symbols-outlined text-red-500 text-sm">arrow_downward</span> 
-                Descontos Acumulados ({activeYear})
+                Descontos Acumulados ({activeYear === 'all' ? 'Todos os anos' : activeYear})
               </span>
               <div className="text-2xl font-bold text-slate-900 z-10">{formatCurrency(totalDeducted)}</div>
               <div className="mt-4 flex items-center gap-1 text-red-500 text-[10px] font-bold">
@@ -161,10 +243,12 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
             </div>
           </div>
 
-          {/* Graphical Area - Overlay Line Chart mimicking mockup */}
+          {/* Graphical Area - Overlay Line Chart */}
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs flex flex-col min-h-[300px]">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-slate-900 text-sm">Gráfico Anual de Fluxo de Caixa</h3>
+              <h3 className="font-bold text-slate-900 text-sm">
+                {activeYear === 'all' ? "Evolução de Rendimentos" : "Gráfico Anual de Fluxo de Caixa"}
+              </h3>
               <span className="text-[10px] bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold">Líquido vs Descontos</span>
             </div>
 
@@ -180,17 +264,15 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
               </div>
 
               {/* Plotting points / columns backdrop */}
-              {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((mLabel, mIdx) => {
-                const mName = monthsInOrderPT[mIdx];
-                const match = filteredList.find(x => x.competencia.mes === mName);
-                const isPresent = !!match;
-                const value = match ? (match.valores.salario_liquido || 0) : 0;
+              {graphData.map((gItem, gIdx) => {
+                const isPresent = gItem.isPresent;
+                const value = gItem.value;
                 const heightPct = isPresent ? Math.min(Math.max((value / maxNetVal) * 75, 15), 100) : 0;
 
                 return (
                   <div 
-                    key={mIdx} 
-                    onClick={() => match && handleMonthClick(match.id)}
+                    key={gItem.id} 
+                    onClick={() => gItem.match && handleMonthClick(gItem.match.id)}
                     className={`flex-1 flex flex-col items-center gap-2 group h-full justify-end z-10 ${isPresent ? 'cursor-pointer' : 'opacity-15'}`}
                   >
                     <div 
@@ -203,7 +285,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-400 font-bold hidden sm:block">{mLabel}</span>
+                    <span className="text-[10px] text-slate-400 font-bold hidden sm:block whitespace-nowrap">{gItem.label}</span>
                   </div>
                 );
               })}
@@ -279,7 +361,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
                   </span>
                 </div>
                 {worstMonthObj && (
-                  <span className="text-[9px] font-bold text-red-650 bg-red-50 px-2.5 py-1 rounded-full border border-red-105 shrink-0 font-semibold">
+                  <span className="text-[9px] font-bold text-red-650 bg-red-50 px-2.5 py-1 rounded-full border border-red-105 shrink-0 font-semibold font-semibold">
                     {formatCurrency(worstMonthObj.trabalho?.media_por_dia || 0)}/dia
                   </span>
                 )}
@@ -290,16 +372,18 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
           {/* Monthly Breakdown List */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xs flex-1 flex flex-col overflow-hidden max-h-[380px]">
             <div className="p-4 border-b border-slate-50 bg-slate-50/50 sticky top-0 z-10">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Histórico Mensal ({activeYear})</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Histórico Mensal ({activeYear === 'all' ? 'Todos os anos' : activeYear})
+              </h3>
             </div>
             
             <div className="overflow-y-auto flex-1 p-2 space-y-1.5 custom-scrollbar">
-              {filteredList.map((item, idx) => {
-                const isPositive = item.valores.salario_liquido! > 4000;
+              {sortedHistoryList.map((item, idx) => {
+                const isPositive = (item.valores.salario_liquido || 0) > 4000;
                 
                 return (
                   <div 
-                    key={idx}
+                    key={item.id || idx}
                     onClick={() => handleMonthClick(item.id)}
                     className="flex flex-col p-2.5 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group border border-transparent hover:border-slate-100"
                   >
@@ -333,8 +417,8 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
                   </div>
                 );
               })}
-              {filteredList.length === 0 && (
-                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhum registro para {activeYear}</p>
+              {sortedHistoryList.length === 0 && (
+                <p className="text-xs text-slate-400 italic py-6 text-center">Nenhuma análise encontrada para este período.</p>
               )}
             </div>
           </div>
@@ -361,7 +445,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
               className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
             >
               <option value="">-- Selecione o Mês A --</option>
-              {analysedList.map(item => (
+              {sortedHistoryList.map(item => (
                 <option key={item.id} value={item.id}>{item.competencia.mes} {item.competencia.ano}</option>
               ))}
             </select>
@@ -375,7 +459,7 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
               className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
             >
               <option value="">-- Selecione o Mês B --</option>
-              {analysedList.map(item => (
+              {sortedHistoryList.map(item => (
                 <option key={item.id} value={item.id}>{item.competencia.mes} {item.competencia.ano}</option>
               ))}
             </select>

@@ -225,6 +225,12 @@ function parseBrazilianNumber(val: any): number | null {
 }
 
 function computeAnalysisModeAndConfidence(data: any) {
+  if (data.analysis_mode === "manual_assistido") {
+    data.extraction_confidence = 0;
+    data.campos_extraidos = [];
+    data.campos_ausentes = ["dados_do_contracheque"];
+    return data;
+  }
   let score = 0;
   const campos_extraidos: string[] = [];
   const campos_ausentes: string[] = [];
@@ -569,27 +575,45 @@ function getFallbackPayload(fileName: string): any {
       total_proventos: null,
       total_adicionais: null,
       inss: null,
-      fgts: null
+      fgts: null,
+      horas_extras_valor: null,
+      adicional_noturno_valor: null,
+      bonus: null,
+      dsr_valor: null,
+      ferias_valor: null,
+      terco_ferias_valor: null,
+      decimo_terceiro_valor: null,
+      vale_transporte_valor: null,
+      seguro_vida_valor: null,
+      saldo_devedor_valor: null,
+      adiantamento_valor: null,
+      provento_horas_trabalhadas: null,
+      bruto_total_folha: null
     },
     trabalho: {
       dias_trabalhados: null,
       horas_trabalhadas: null,
       horas_extras: null,
       horas_noturnas: null,
-      horas_dsr_intermitente: null
+      horas_dsr_intermitente: null,
+      media_por_dia: null,
+      media_por_hora: null
     },
     itens: [],
     alertas: [
       {
         tipo: "info",
-        mensagem: "Os servidores da IA do Gemini estão sob alta demanda temporária. Entramos no modo seguro de preenchimento assistido para que você possa continuar sem interrupções."
+        mensagem: "A IA está temporariamente indisponível para leitura automática. Você pode preencher os dados manualmente e continuar a análise."
       }
     ],
-    resumo_ia: `Lemos o arquivo "${fileName}" com sucesso, mas os servidores de IA (Gemini) estão temporariamente sobrecarregados. Ativamos o modo de preenchimento assistido para que você possa declarar e ajustar os seus dados manualmente acima.`,
-    campos_ausentes: ["trabalhador.nome", "empresa.nome", "valores.salario_bruto", "valores.salario_liquido"],
+    resumo_ia: "A IA está temporariamente indisponível para leitura automática. Você pode preencher os dados manualmente e continuar a análise.",
+    analysis_mode: "manual_assistido",
+    extraction_confidence: 0,
+    campos_extraidos: [],
+    campos_ausentes: ["dados_do_contracheque"],
     validacao_multipla: {
       status: "ok",
-      motivo: "Recuperação de erro transiente de IA. Modo assistido.",
+      motivo: "A IA está temporariamente indisponível para leitura automática. Você pode preencher os dados manualmente e continuar a análise.",
       mesma_competencia: true,
       mesma_empresa: true,
       mesmo_trabalhador: true,
@@ -882,8 +906,12 @@ REGRAS CRÍTICAS DE EXTRAÇÃO:
       let lastError: any = null;
       let success = false;
       let response: any = null;
-      const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
-      const maxRetries = 5;
+      const GEMINI_MODELS = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash"
+      ];
+      const maxRetries = 3;
       let modelIndex = 0;
       let attempt = 1;
 
@@ -929,15 +957,15 @@ REGRAS CRÍTICAS DE EXTRAÇÃO:
           break; // Success! Exit the retry loop.
         } catch (err: any) {
           lastError = err;
-          console.warn(`[Contracheque AI Server] Tentativa ${attempt} falhou para ${file.name} com o modelo ${selectedModel}. Erro: ${err.message || err}`);
           
           const errStr = (err?.message || "") + " " + (err?.status || "") + " " + JSON.stringify(err);
           const errorMsg = errStr.toLowerCase();
           
           // Check for 404 Model Not Found
           const is404 = err?.status === 404 || err?.statusCode === 404 || errorMsg.includes("not found") || errorMsg.includes("404");
+          
           if (is404) {
-            console.log(`[Contracheque AI Server] Modelo ${selectedModel} não encontrado (404). Rotacionando para o próximo modelo reserva...`);
+            console.warn(`[Contracheque AI Server] Modelo ${selectedModel} indisponível/não encontrado (404).`);
             modelIndex = (modelIndex + 1) % GEMINI_MODELS.length;
             attempt++;
             continue;
@@ -956,29 +984,19 @@ REGRAS CRÍTICAS DE EXTRAÇÃO:
             errorMsg.includes("rate limit") || 
             errorMsg.includes("exhausted");
 
-          let waitTimeMs = (attempt === 1) ? 2000 : 4000;
-          
-          const secondsMatch = errorMsg.match(/please retry in ([\d\.]+)s/);
-          if (secondsMatch && secondsMatch[1]) {
-            const parsedSec = parseFloat(secondsMatch[1]);
-            if (!isNaN(parsedSec)) {
-              waitTimeMs = Math.max(waitTimeMs, Math.ceil(parsedSec * 1000) + 500);
-            }
+          if (isTransient) {
+            console.warn(`[Contracheque AI Server] Tentativa ${attempt} falhou para ${file.name} com o modelo ${selectedModel} devido a erro temporário (503/429).`);
           } else {
-            const delayMatch = errorMsg.match(/"retrydelay"\s*:\s*"(\d+)s"/);
-            if (delayMatch && delayMatch[1]) {
-              const parsedSec = parseInt(delayMatch[1], 10);
-              if (!isNaN(parsedSec)) {
-                waitTimeMs = Math.max(waitTimeMs, (parsedSec * 1000) + 1000);
-              }
-            }
+            console.warn(`[Contracheque AI Server] Tentativa ${attempt} falhou para ${file.name} com o modelo ${selectedModel}. Erro: ${err.message || err}`);
           }
 
-          if (isTransient && attempt < maxRetries) {
-            console.log(`[Contracheque AI Server] Erro transiente detectado (Tentativa ${attempt}). Aguardando ${waitTimeMs}ms antes de tentar próximo modelo...`);
+          if (attempt < maxRetries) {
+            const delays = [3000, 6000, 10000];
+            const waitTimeMs = delays[attempt - 1] || 10000;
+            
+            console.log(`[Contracheque AI Server] Aguardando ${waitTimeMs / 1000}s antes de tentar próximo modelo...`);
             await new Promise(resolve => setTimeout(resolve, waitTimeMs));
             
-            // Switch model on every retry to maximize chances of hitting a free model that is online
             modelIndex = (modelIndex + 1) % GEMINI_MODELS.length;
             attempt++;
           } else {
@@ -1006,21 +1024,47 @@ REGRAS CRÍTICAS DE EXTRAÇÃO:
           }
           // Highlight extracted fields vs missing ones, heal values
           const healedObj = healAndValidatePaycheck(resultObj);
+          
+          console.log(`[Contracheque AI Server] Status Final: Sucesso (Extraído por IA)`);
+          console.log(`[Contracheque AI Server] Modelo Usado: ${GEMINI_MODELS[modelIndex]}`);
+          console.log(`[Contracheque AI Server] Tentativas Utilizadas: ${attempt}`);
+          console.log(`[Contracheque AI Server] Modo Análise (analysis_mode): ${healedObj.analysis_mode}`);
+          console.log(`[Contracheque AI Server] Campos Extraídos: ${JSON.stringify(healedObj.campos_extraidos)}`);
+          console.log(`[Contracheque AI Server] Campos Ausentes: ${JSON.stringify(healedObj.campos_ausentes)}`);
+
           analyzedResults.push(healedObj);
         } catch (parseErr: any) {
-          console.error(`[Contracheque AI Server] Erro ao tratar parse de JSON retornado pelo Gemini para ${file.name}:`, parseErr);
+          console.warn(`[Contracheque AI Server] Erro ao tratar parse de JSON retornado pelo Gemini para ${file.name}: ${parseErr.message || parseErr}`);
           console.log(`[Contracheque AI Server] Ativando preenchimento manual assistido em função de erro de parse.`);
           const fallbackObj = getFallbackPayload(file.name);
           fallbackObj.id = `pc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-          analyzedResults.push(healAndValidatePaycheck(fallbackObj));
+          const healedObj = healAndValidatePaycheck(fallbackObj);
+          
+          console.log(`[Contracheque AI Server] Status Final: Falha (Parsing Error, Ativando Manual)`);
+          console.log(`[Contracheque AI Server] Modelo Usado: ${GEMINI_MODELS[modelIndex]}`);
+          console.log(`[Contracheque AI Server] Tentativas Utilizadas: ${attempt}`);
+          console.log(`[Contracheque AI Server] Modo Análise (analysis_mode): ${healedObj.analysis_mode}`);
+          console.log(`[Contracheque AI Server] Campos Extraídos: ${JSON.stringify(healedObj.campos_extraidos)}`);
+          console.log(`[Contracheque AI Server] Campos Ausentes: ${JSON.stringify(healedObj.campos_ausentes)}`);
+
+          analyzedResults.push(healedObj);
         }
       } else {
         const err = lastError || new Error("Unknown Gemini API error");
-        console.error(`[Contracheque AI Server] Erro persistente ao analisar ${file.name} via Gemini API:`, err);
+        console.warn(`[Contracheque AI Server] Erro persistente ou esgotamento de tentativas para ${file.name}: ${err.message || err}`);
         console.log(`[Contracheque AI Server] Ativando preenchimento manual assistido em função de erro persistente do Gemini.`);
         const fallbackObj = getFallbackPayload(file.name);
         fallbackObj.id = `pc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        analyzedResults.push(healAndValidatePaycheck(fallbackObj));
+        const healedObj = healAndValidatePaycheck(fallbackObj);
+
+        console.log(`[Contracheque AI Server] Status Final: Falha Permanente (Modelos Esgotados, Ativando Manual)`);
+        console.log(`[Contracheque AI Server] Último Modelo Usado: ${GEMINI_MODELS[modelIndex]}`);
+        console.log(`[Contracheque AI Server] Tentativas Utilizadas: ${attempt}`);
+        console.log(`[Contracheque AI Server] Modo Análise (analysis_mode): ${healedObj.analysis_mode}`);
+        console.log(`[Contracheque AI Server] Campos Extraídos: ${JSON.stringify(healedObj.campos_extraidos)}`);
+        console.log(`[Contracheque AI Server] Campos Ausentes: ${JSON.stringify(healedObj.campos_ausentes)}`);
+
+        analyzedResults.push(healedObj);
       }
     }
   }
