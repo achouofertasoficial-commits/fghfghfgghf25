@@ -158,14 +158,14 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
 
     const data: ComplementaryAnalysisData = {
       dias_trabalhados: isNaN(Number(parsedDias)) ? null : parsedDias,
-      horas_trabalhadas: isHorasTrabalhadasExtracted ? parsedHorasTrabalhadas : (isNaN(Number(parsedHoras)) ? null : parsedHoras),
-      horas_extras: isHorasExtrasExtracted ? parsedHorasExtras : (isNaN(Number(parsedExtras)) ? null : parsedExtras),
-      horas_noturnas: isHorasNoturnasExtracted ? parsedHorasNoturnas : (isNaN(Number(parsedNoturnas)) ? null : parsedNoturnas),
-      salario_liquido_recebido: isSalarioLiquidoExtracted ? parsedSalarioLiquido : parsedSalLiq,
-      empresa_nome: isEmpresaNomeExtracted ? parsedEmpresaNome : (empresaText.trim() || null),
+      horas_trabalhadas: isNaN(Number(parsedHoras)) ? null : parsedHoras,
+      horas_extras: isNaN(Number(parsedExtras)) ? null : parsedExtras,
+      horas_noturnas: isNaN(Number(parsedNoturnas)) ? null : parsedNoturnas,
+      salario_liquido_recebido: parsedSalLiq,
+      empresa_nome: (empresaText && empresaText.trim()) || null,
       tipo_trabalhador: tipoTrab || null,
       observacoes: obsText.trim() || null,
-      horas_dsr_intermitente: isHorasDsrExtracted ? parsedHorasDsr : (isNaN(Number(parsedDsr)) ? null : parsedDsr),
+      horas_dsr_intermitente: isNaN(Number(parsedDsr)) ? null : parsedDsr,
       total_descontos_confirmado: totalDescontosConfirmed,
       descontos_removidos_ids: removedIds,
       descontos_removidos_nomes: removedNames
@@ -246,9 +246,12 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                   <span className="material-symbols-outlined text-[16px] text-emerald-800">payments</span>
                   Valor líquido extraído
                 </label>
-                <div className="text-sm font-extrabold text-slate-900 mt-1">
-                  {parsedSalarioLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </div>
+                <input
+                  type="text"
+                  value={salLiqText}
+                  onChange={(e) => setSalLiqText(e.target.value)}
+                  className="text-sm font-extrabold text-slate-900 mt-1 bg-transparent border-0 outline-none w-full focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5"
+                />
                 <span className="text-[9px] text-emerald-700 font-medium">
                   Salário líquido final extraído com precisão do holerite.
                 </span>
@@ -282,8 +285,14 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                   <span className="material-symbols-outlined text-[16px] text-slate-500">schedule</span>
                   Horas trabalhadas
                 </label>
-                <div className="text-sm font-extrabold text-slate-800 mt-1">
-                  {parsedHorasTrabalhadas} horas
+                <div className="flex items-center gap-1 text-sm font-extrabold text-slate-800 mt-1">
+                  <input
+                    type="text"
+                    value={horasText}
+                    onChange={(e) => setHorasText(e.target.value)}
+                    className="bg-transparent border-0 outline-none w-20 focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5 text-slate-800 font-extrabold"
+                  />
+                  <span>horas</span>
                 </div>
                 <span className="text-[9px] text-slate-500 font-medium">
                   Carga horária mensal extraída com as devidas referências.
@@ -319,8 +328,14 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                   <span className="material-symbols-outlined text-[16px] text-amber-500 font-bold">add_time</span>
                   Horas extras realizadas
                 </label>
-                <div className="text-sm font-extrabold text-slate-800 mt-1">
-                  {parsedHorasExtras} horas
+                <div className="flex items-center gap-1 text-sm font-extrabold text-slate-800 mt-1">
+                  <input
+                    type="text"
+                    value={extrasText}
+                    onChange={(e) => setExtrasText(e.target.value)}
+                    className="bg-transparent border-0 outline-none w-20 focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5 text-slate-800 font-extrabold"
+                  />
+                  <span>horas</span>
                 </div>
                 <span className="text-[9px] text-slate-500 font-medium">
                   Soma da quantidade de horas extras extraída do holerite.
@@ -356,8 +371,14 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                   <span className="material-symbols-outlined text-[16px] text-slate-800">dark_mode</span>
                   Horas noturnas realizadas
                 </label>
-                <div className="text-sm font-extrabold text-slate-800 mt-1">
-                  {parsedHorasNoturnas} horas
+                <div className="flex items-center gap-1 text-sm font-extrabold text-slate-800 mt-1">
+                  <input
+                    type="text"
+                    value={noturnasText}
+                    onChange={(e) => setNoturnasText(e.target.value)}
+                    className="bg-transparent border-0 outline-none w-20 focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5 text-slate-800 font-extrabold"
+                  />
+                  <span>horas</span>
                 </div>
                 <span className="text-[9px] text-slate-500 font-medium">
                   Quantidade total extraída de adicional noturno do holerite.
@@ -394,8 +415,14 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                     <span className="material-symbols-outlined text-[16px] text-indigo-500">beach_access</span>
                     Horas de DSR Intermitente
                   </label>
-                  <div className="text-sm font-extrabold text-slate-800 mt-1">
-                    {parsedHorasDsr} horas
+                  <div className="flex items-center gap-1 text-sm font-extrabold text-slate-800 mt-1">
+                    <input
+                      type="text"
+                      value={dsrText}
+                      onChange={(e) => setDsrText(e.target.value)}
+                      className="bg-transparent border-0 outline-none w-20 focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5 text-slate-800 font-extrabold"
+                    />
+                    <span>horas</span>
                   </div>
                   <span className="text-[9px] text-slate-500 font-medium">
                     Descanso Semanal Remunerado identificado nas rubricas da IA.
@@ -432,9 +459,12 @@ export default function ComplementAnalysisView({ currentAnalysis, onConfirm, onD
                   <span className="material-symbols-outlined text-[16px] text-slate-500">domain</span>
                   Nome da empresa
                 </label>
-                <div className="text-sm font-extrabold text-slate-800 mt-1 truncate">
-                  {parsedEmpresaNome}
-                </div>
+                <input
+                  type="text"
+                  value={empresaText}
+                  onChange={(e) => setEmpresaText(e.target.value)}
+                  className="text-sm font-extrabold text-slate-800 mt-1 bg-transparent border-0 outline-none w-full focus:bg-white focus:ring-1 focus:ring-emerald-600 rounded px-1 -mx-1 py-0.5 text-slate-800 font-extrabold"
+                />
                 <span className="text-[9px] text-slate-500 font-medium">
                   CNPJ/Nome de fonte pagadora identificado pelo extrator de layout.
                 </span>

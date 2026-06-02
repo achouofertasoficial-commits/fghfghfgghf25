@@ -127,6 +127,19 @@ export default function App() {
     setCurrentScreen("dashboard");
   };
 
+  const handleDeleteAnalysis = async (id: string) => {
+    const deleted = await deleteAnalysis(id);
+    if (!deleted) return;
+
+    setAnalysedList(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      if (selectedMonthId === id) {
+        setSelectedMonthId(updated[0]?.id || "");
+      }
+      return updated;
+    });
+  };
+
   // Callback when AI finishes scanning
   const [pendingResultsToConsolidate, setPendingResultsToConsolidate] = useState<any[] | null>(null);
   const [showCompetencyConflictDialog, setShowCompetencyConflictDialog] = useState(false);
@@ -788,6 +801,7 @@ export default function App() {
             analysedList={analysedList}
             onNavigate={setCurrentScreen}
             setSelectedMonthId={setSelectedMonthId}
+            onDeleteAnalysis={handleDeleteAnalysis}
           />
         )}
 

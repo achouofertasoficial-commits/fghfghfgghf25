@@ -6,9 +6,26 @@ interface HistoryViewProps {
   analysedList: ContrachequeAnalise[];
   onNavigate: (screen: Screen) => void;
   setSelectedMonthId: (id: string) => void;
+  onDeleteAnalysis?: (id: string) => void;
 }
 
-export default function HistoryView({ analysedList, onNavigate, setSelectedMonthId }: HistoryViewProps) {
+export default function HistoryView({ analysedList, onNavigate, setSelectedMonthId, onDeleteAnalysis }: HistoryViewProps) {
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteTargetLabel, setDeleteTargetLabel] = useState<string>("");
+
+  const handleRequestDelete = (id: string, label: string) => {
+    setDeleteTargetId(id);
+    setDeleteTargetLabel(label);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteTargetId && onDeleteAnalysis) {
+      onDeleteAnalysis(deleteTargetId);
+    }
+    setDeleteTargetId(null);
+    setDeleteTargetLabel("");
+  };
+
   // Generate unique available years sorted descending
   const availableYears = Array.from(new Set(
     analysedList.map(item => String(item.competencia.ano || "")).filter(Boolean)
@@ -403,10 +420,25 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <p className={`text-xs font-bold ${isPositive ? 'text-emerald-800' : 'text-slate-800'}`}>
-                          {formatCurrency(item.valores.salario_liquido || 0)}
-                        </p>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <p className={`text-xs font-bold ${isPositive ? 'text-emerald-800' : 'text-slate-800'}`}>
+                            {formatCurrency(item.valores.salario_liquido || 0)}
+                          </p>
+                        </div>
+                        {onDeleteAnalysis && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequestDelete(item.id, `${item.competencia.mes} ${item.competencia.ano}`);
+                            }}
+                            title="Excluir contracheque"
+                            aria-label="Excluir contracheque"
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">delete_outline</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -527,6 +559,39 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
           </div>
         )}
       </div>
+
+      {deleteTargetId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 scale-95 animate-scaleUp text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 mb-4 mx-auto animate-bounce animate-duration-1000">
+              <span className="material-symbols-outlined text-[24px]">delete</span>
+            </div>
+            <h3 className="text-base font-extrabold text-slate-900 mb-2">
+              Deseja excluir este contracheque?
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              Esta ação removerá esta análise ({deleteTargetLabel}) do histórico, gráficos e comparativos. Não será possível desfazer.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  setDeleteTargetId(null);
+                  setDeleteTargetLabel("");
+                }}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-rose-650 hover:bg-rose-750 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Excluir contracheque
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
