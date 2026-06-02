@@ -584,7 +584,8 @@ export default function HistoryView({ analysedList, onNavigate, setSelectedMonth
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="flex-1 bg-rose-650 hover:bg-rose-750 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                aria-label="Excluir contracheque"
               >
                 Excluir contracheque
               </button>

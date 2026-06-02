@@ -195,9 +195,10 @@ export default function SettingsView({ user, onUpdateUser, onLogout, onClearAllA
                   setShowConfirmModal(false);
                   onClearAllAnalyses();
                 }}
-                className="flex-1 bg-rose-650 hover:bg-rose-700 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                aria-label="Limpar todas as análises"
               >
-                Sim, limpar tudo
+                Limpar Tudo
               </button>
             </div>
           </div>
