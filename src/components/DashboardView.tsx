@@ -1,6 +1,5 @@
 import React from 'react';
 import { ContrachequeAnalise, User, Screen } from '../types';
-import { getCompetenceValue } from '../services/analysisStorage';
 
 interface DashboardViewProps {
   analysedList: ContrachequeAnalise[];
@@ -31,14 +30,32 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
     );
   }
 
-  // Sort analysedList descendign by competence real value (newest first)
-  const sortedList = [...analysedList].sort((a, b) => getCompetenceValue(b) - getCompetenceValue(a));
+  function getCompetenceValue(item: ContrachequeAnalise) {
+    const meses: Record<string, number> = {
+      Janeiro: 0,
+      Fevereiro: 1,
+      Março: 2,
+      Abril: 3,
+      Maio: 4,
+      Junho: 5,
+      Julho: 6,
+      Agosto: 7,
+      Setembro: 8,
+      Outubro: 9,
+      Novembro: 10,
+      Dezembro: 11
+    };
 
-  // Use the first (latest) analysed item to populate wages
-  const latestItem = sortedList[0];
+    return Number(item.competencia.ano || 0) * 12 + (meses[item.competencia.mes || ""] ?? 0);
+  }
+
+  const sortedAnalyses = [...analysedList].sort((a, b) => getCompetenceValue(a) - getCompetenceValue(b));
+
+  // Use the last (latest chronologically) analysed item to populate wages
+  const latestItem = sortedAnalyses[sortedAnalyses.length - 1];
 
   // Comparative month details
-  const previousItem = sortedList[1];
+  const previousItem = sortedAnalyses[sortedAnalyses.length - 2];
   let comparisonText = "Sem mês anterior para comparar";
   let showTrendingIcon = false;
   let isPositive = false;
@@ -72,12 +89,23 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
     return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // Find percentage proportion of Proventos (salario_liquido / salario_bruto)
-  const netRatio = latestItem.valores.salario_bruto 
-    ? Math.round((latestItem.valores.salario_liquido! / latestItem.valores.salario_bruto!) * 100) 
-    : 73;
-  
-  const discountRatio = 100 - netRatio;
+  const brutoTotalFolha =
+    latestItem.valores.bruto_total_folha ??
+    latestItem.valores.total_proventos ??
+    latestItem.valores.salario_bruto ??
+    null;
+
+  const clampPercent = (value: number) => {
+    return Math.min(Math.max(value, 0), 100);
+  };
+
+  const netRatio = brutoTotalFolha && brutoTotalFolha > 0
+    ? clampPercent(Math.round(((latestItem.valores.salario_liquido || 0) / brutoTotalFolha) * 100))
+    : 0;
+
+  const discountRatio = brutoTotalFolha && brutoTotalFolha > 0
+    ? clampPercent(Math.round(((latestItem.valores.total_descontos || 0) / brutoTotalFolha) * 100))
+    : 0;
 
   // Pie chart calculation
   const strokeDash = `${netRatio} ${discountRatio}`;
@@ -93,6 +121,15 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
     if (!fullMonth) return "Mês";
     return shortMonths[fullMonth] || fullMonth.substring(0, 3);
   };
+
+  const getMonthYearLabel = (item: ContrachequeAnalise) => {
+    if (!item.competencia) return "";
+    const mesAbrv = getShortMonthName(item.competencia.mes);
+    const ano = String(item.competencia.ano || "").substring(2);
+    return `${mesAbrv}/${ano}`;
+  };
+
+  const maxNet = Math.max(...sortedAnalyses.map(item => Number(item.valores.salario_liquido || 0)), 1);
 
   // Handle detailed month routing
   const viewMonthDetails = (id: string) => {
@@ -144,11 +181,11 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
         {/* Salário Bruto card */}
         <div className="bg-white border border-slate-100 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] shadow-xs hover:shadow-sm transition-all transform hover:translate-y-[-2px]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs text-slate-500 font-bold uppercase tracking-wider">Salário Bruto</h2>
+            <h2 className="text-xs text-slate-500 font-bold uppercase tracking-wider">Bruto Total da Folha</h2>
             <span className="material-symbols-outlined text-slate-400 text-xl">payments</span>
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(latestItem.valores.salario_bruto)}</p>
+            <p className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(brutoTotalFolha)}</p>
           </div>
         </div>
 
@@ -159,7 +196,7 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
             <span className="material-symbols-outlined text-slate-400 text-xl">receipt_long</span>
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(latestItem.valores.total_descontos)}</p>
+            <p className="text-2xl font-bold text-rose-600 tracking-tight">- {formatCurrency(latestItem.valores.total_descontos)}</p>
           </div>
         </div>
       </div>
@@ -198,6 +235,18 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
             </p>
           </div>
         </div>
+
+        {latestItem.valores.provento_horas_trabalhadas !== null && latestItem.valores.provento_horas_trabalhadas !== undefined && (
+          <div className="flex-1 min-w-[150px] bg-white border border-slate-100 rounded-xl p-4 flex items-center gap-3 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 border border-slate-100">
+              <span className="material-symbols-outlined text-lg">hourglass_empty</span>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-semibold">Provento por Horas</p>
+              <p className="text-sm font-bold text-slate-800">{formatCurrency(latestItem.valores.provento_horas_trabalhadas)}</p>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 min-w-[150px] bg-white border border-slate-100 rounded-xl p-4 flex items-center gap-3 shadow-xs">
           <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 border border-slate-100">
@@ -246,15 +295,14 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
             </div>
 
             {/* Invert list to show chronologically if we have months */}
-            {[...sortedList].reverse().map((item, index) => {
-              // Scale bar height according to values (from R$ 3000 to R$ 7000)
-              const baseValue = item.valores.salario_liquido || 3000;
-              const barHeightPct = Math.min(Math.max(((baseValue) / 7500) * 100, 20), 100);
-              const isLast = index === sortedList.length - 1;
+            {sortedAnalyses.map((item, index) => {
+              const netValue = item.valores.salario_liquido || 0;
+              const barHeightPct = Math.min(Math.max((netValue / maxNet) * 100, 8), 100);
+              const isLast = index === sortedAnalyses.length - 1;
 
               return (
                 <div 
-                  key={index} 
+                  key={item.id || index} 
                   onClick={() => viewMonthDetails(item.id)}
                   className="flex-1 flex flex-col items-center gap-2 z-10 group cursor-pointer"
                 >
@@ -268,10 +316,10 @@ export default function DashboardView({ analysedList, user, onNavigate, setSelec
                   >
                     {/* Tooltip detail block */}
                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-955 text-white text-[10px] font-bold py-1 px-2.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md z-40 bg-slate-900">
-                      {formatCurrency(baseValue)}
+                      {formatCurrency(netValue)}
                     </div>
                   </div>
-                  <span className="text-xs text-slate-400 font-medium">{getShortMonthName(item.competencia.mes)}</span>
+                  <span className="text-xs text-slate-400 font-medium">{getMonthYearLabel(item)}</span>
                 </div>
               );
             })}
